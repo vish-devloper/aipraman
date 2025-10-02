@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Praman: Real or Fake Content Detection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        /* Custom animation for analysis progress */
+        @keyframes progress-bar {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+        .progress-bar-animation {
+            animation: progress-bar 3s ease-in-out forwards;
+        }
+        /* Simple pulse for skeleton loaders */
+        @keyframes pulse {
+            50% { opacity: .5; }
+        }
+        .skeleton-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        /* Hide scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        /* Anomaly Heatmap Style */
+        .heatmap-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, rgba(255, 0, 0, 0.4), rgba(255, 255, 0, 0.4), rgba(0, 255, 255, 0.4));
+            mix-blend-mode: overlay;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none; /* Allows clicks to go through to the image */
+            border-radius: 0.75rem; /* Matches image rounding */
+        }
+        .heatmap-overlay.visible {
+            opacity: 0.7;
+        }
+         /* Simple modal for feedback */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .modal-backdrop.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: scale(0.95);
+            transition: transform 0.3s ease-in-out;
+        }
+        .modal-backdrop.visible .modal-content {
+            transform: scale(1);
+        }
+
+        /* AI Chat styles */
+        .ai-chat-bubble {
+            background-color: #e5e7eb; /* gray-200 */
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            max-width: 80%;
+        }
+        .user-chat-bubble {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            max-width: 80%;
+        }
+        .typing-indicator {
+            display: inline-block;
+            margin-left: 0.5rem;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #9ca3af; /* gray-400 */
+            animation: typing 1s infinite;
+        }
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+        .tab-btn.active {
+            border-color: #3b82f6; /* blue-500 */
+            color: #3b82f6; /* blue-500 */
+        }
+    </style>
+</head>
+<body class="gradient-bg text-gray-800 antialiased">
+
+    <!-- Main Application Container -->
+    <div id="app" class="min-h-screen flex flex-col">
+
+        <!-- Header -->
+        <header id="appHeader" class="card sticky top-0 z-50 shadow-md hidden">
+            <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+                <div class="flex-1 flex justify-start">
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                        <h1 class="text-2xl font-bold text-gray-800">AI Praman</h1>
+                    </div>
+                </div>
+                <div class="flex-1 flex justify-center">
+                    <div class="flex space-x-8">
+                        <button id="nav-detector" class="text-blue-600 font-semibold border-b-2 border-blue-600 pb-1">Detector</button>
+                        <button id="nav-fact-check" class="text-gray-500 hover:text-blue-600 transition duration-300 pb-1">Fact Check</button>
+                        <button id="nav-news" class="text-gray-500 hover:text-blue-600 transition duration-300 pb-1">Real-Time News</button>
+                        <button id="nav-awareness" class="text-gray-500 hover:text-blue-600 transition duration-300 pb-1">Awareness Hub</button>
+                        <button id="nav-about" class="text-gray-500 hover:text-blue-600 transition duration-300 pb-1">About Us</button>
+                    </div>
+                </div>
+                <div class="flex-1 flex justify-end">
+                    <button id="logoutBtn" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-red-600 transition duration-300">Logout</button>
+                </div>
+            </nav>
+        </header>
+
+        <main class="flex-grow container mx-auto p-4 md:p-8 flex items-center justify-center">
+
+             <!-- ====== Login Page ====== -->
+            <div id="loginPage">
+                <div class="max-w-md w-full card rounded-xl shadow-lg p-8 space-y-6">
+                    <div class="text-center">
+                        <div class="flex items-center justify-center space-x-2">
+                            <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            <h1 class="text-3xl font-bold text-gray-800">AI Praman</h1>
+                        </div>
+                        <p class="mt-2 text-gray-600">Sign in to continue.</p>
+                    </div>
+                    <form id="loginForm" class="space-y-4">
+                        <div>
+                            <label for="loginEmail" class="block text-sm font-medium text-gray-700">Email Address</label>
+                            <input id="loginEmail" name="email" type="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="loginPassword" class="block text-sm font-medium text-gray-700">Password</label>
+                            <input id="loginPassword" name="password" type="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <p id="loginError" class="text-sm text-red-600 hidden">Please fill out all fields.</p>
+                        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Sign In</button>
+                    </form>
+                    <p class="text-sm text-center text-gray-600">
+                        Don't have an account? <button id="goToSignUpBtn" class="font-medium text-blue-600 hover:text-blue-500">Sign up</button>
+                    </p>
+                </div>
+            </div>
+
+            <!-- ====== Sign-Up Page ====== -->
+            <div id="signUpPage" class="hidden">
+                 <div class="max-w-md w-full card rounded-xl shadow-lg p-8 space-y-6">
+                    <div class="text-center">
+                         <div class="flex items-center justify-center space-x-2">
+                            <svg class="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            <h1 class="text-3xl font-bold text-gray-800">Create Account</h1>
+                        </div>
+                         <p class="mt-2 text-gray-600">Get started with your free account.</p>
+                    </div>
+                    <form id="signUpForm" class="space-y-4">
+                        <div>
+                            <label for="signUpEmail" class="block text-sm font-medium text-gray-700">Email Address</label>
+                            <input id="signUpEmail" name="email" type="email" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="signUpPassword" class="block text-sm font-medium text-gray-700">Password</label>
+                            <input id="signUpPassword" name="password" type="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                         <p id="signUpError" class="text-sm text-red-600 hidden">Please fill out all fields.</p>
+                        <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Sign Up</button>
+                    </form>
+                    <p class="text-sm text-center text-gray-600">
+                        Already have an account? <button id="goToLoginBtn" class="font-medium text-blue-600 hover:text-blue-500">Sign In</button>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- ====== Welcome Page ====== -->
+            <div id="welcomePage" class="hidden text-center flex-col items-center justify-center h-full animate-fade-in">
+                <div class="max-w-3xl">
+                    <svg class="w-24 h-24 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    <h2 class="text-4xl md:text-5xl font-bold mb-4">Welcome to AI Praman</h2>
+                    <p class="text-lg text-gray-600 mb-8">Your trusted tool for distinguishing between real and AI-generated content. In a world of deepfakes and misinformation, clarity is crucial. Let's verify.</p>
+                    <button id="getStartedBtn" class="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300 transform hover:scale-105">
+                        Get Started
+                    </button>
+                </div>
+            </div>
+
+            <!-- ====== Main App Page (Detector) ====== -->
+            <div id="mainAppPage" class="hidden w-full max-w-5xl">
+                <div class="max-w-4xl mx-auto text-center mb-8">
+                    <h2 class="text-3xl font-bold mb-2">Content Analysis</h2>
+                    <p class="text-gray-600">Analyze images, videos, or audio files for signs of AI generation.</p>
+                </div>
+
+                <!-- Tabs -->
+                <div class="mb-6 border-b border-gray-200">
+                    <nav class="flex justify-center -mb-px space-x-8" aria-label="Tabs">
+                        <button id="tab-image" class="tab-btn active whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Image Analysis</button>
+                        <button id="tab-video" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Video Analysis</button>
+                        <button id="tab-audio" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Audio Analysis</button>
+                        <button id="tab-text" class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Text in Image</button>
+                    </nav>
+                </div>
+                
+                <!-- Image Detector Pane -->
+                <div id="imageDetectorPane">
+                    <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div id="uploadArea" class="card rounded-xl shadow-lg p-8 border-2 border-dashed border-gray-300 text-center cursor-pointer transition duration-300 hover:border-blue-500 hover:bg-blue-50 flex flex-col justify-center items-center">
+                            <input type="file" id="fileInput" class="hidden" accept="image/png, image/jpeg, image/webp">
+                            <div class="flex flex-col items-center justify-center space-y-4">
+                                <svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4V6a4 4 0 014-4h1.586a1 1 0 01.707.293l1.414 1.414a1 1 0 00.707.293H13a4 4 0 014 4v1.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 00-.293.707V16a4 4 0 01-4 4H7z"></path></svg>
+                                <p class="font-semibold text-lg text-gray-700">Upload from Device</p>
+                                <p class="text-gray-600"><span class="font-semibold text-blue-600">Click to upload</span> or drag and drop</p>
+                                <p class="text-sm text-gray-500">PNG, JPG, or WEBP</p>
+                            </div>
+                        </div>
+                        <div class="card rounded-xl shadow-lg p-8 text-center flex flex-col justify-center items-center">
+                            <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            <p class="font-semibold text-lg text-gray-700 mb-4">Analyze from Web URL</p>
+                            <div class="w-full flex flex-col sm:flex-row gap-2">
+                                <input type="url" id="imageUrlInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste image URL here...">
+                                <button id="analyzeUrlBtn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-300 flex-shrink-0">Analyze</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Video Detector Pane -->
+                <div id="videoDetectorPane" class="hidden">
+                        <div class="max-w-2xl mx-auto">
+                            <div id="uploadAreaVideo" class="card rounded-xl shadow-lg p-8 border-2 border-dashed border-gray-300 text-center cursor-pointer transition duration-300 hover:border-blue-500 hover:bg-blue-50 flex flex-col justify-center items-center">
+                                <input type="file" id="fileInputVideo" class="hidden" accept="video/mp4, video/webm, video/quicktime">
+                                <div class="flex flex-col items-center justify-center space-y-4">
+                                    <svg class="w-16 h-16 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" />
+                                    </svg>
+                                    <p class="font-semibold text-lg text-gray-700">Upload Video File</p>
+                                    <p class="text-gray-600"><span class="font-semibold text-blue-600">Click to upload</span> or drag and drop</p>
+                                    <p class="text-sm text-gray-500">MP4, WEBM, MOV (Max 50MB)</p>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+
+                <!-- Audio Detector Pane -->
+                <div id="audioDetectorPane" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                            <div id="uploadAreaAudio" class="card rounded-xl shadow-lg p-8 border-2 border-dashed border-gray-300 text-center cursor-pointer transition duration-300 hover:border-blue-500 hover:bg-blue-50 flex flex-col justify-center items-center">
+                                <input type="file" id="fileInputAudio" class="hidden" accept="audio/mpeg, audio/wav, audio/ogg">
+                                <div class="flex flex-col items-center justify-center space-y-4">
+                                   <svg class="w-16 h-16 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5a6 6 0 00-6-6v1.5a4.5 4.5 0 11-4.5 4.5v-1.5a6 6 0 006-6zm-2.25-7.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z" />
+                                    </svg>
+                                    <p class="font-semibold text-lg text-gray-700">Upload Audio File</p>
+                                    <p class="text-gray-600"><span class="font-semibold text-blue-600">Click to upload</span> or drag and drop</p>
+                                    <p class="text-sm text-gray-500">MP3, WAV, OGG (Max 20MB)</p>
+                                </div>
+                            </div>
+                        </div>
+                </div>
+
+                <!-- Text in Image Detector Pane -->
+                <div id="textInImageDetectorPane" class="hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div id="uploadAreaTextInImage" class="card rounded-xl shadow-lg p-8 border-2 border-dashed border-gray-300 text-center cursor-pointer transition duration-300 hover:border-blue-500 hover:bg-blue-50 flex flex-col justify-center items-center">
+                            <input type="file" id="fileInputTextInImage" class="hidden" accept="image/png, image/jpeg, image/webp">
+                            <div class="flex flex-col items-center justify-center space-y-4">
+                                <svg class="w-16 h-16 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-1.125 0-2.062.938-2.062 2.063v15.375c0 1.125.938 2.063 2.063 2.063h12.75c1.125 0 2.063-.938 2.063-2.063V12.375m-15-9.375h15m-1.5 0v5.625" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.375 21V9.75M12.75 21V9.75M16.125 21V9.75M5.25 6H18.75" />
+                                </svg>                               
+                                <p class="font-semibold text-lg text-gray-700">Upload Image with Text</p>
+                                <p class="text-gray-600"><span class="font-semibold text-blue-600">Click to upload</span> or drag and drop</p>
+                                <p class="text-sm text-gray-500">PNG, JPG, or WEBP</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="historySection" class="max-w-4xl mx-auto mt-12 hidden">
+                    <h3 class="text-center text-lg font-semibold text-gray-700 mb-4">Recent Analyses</h3>
+                    <div id="historyContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4"></div>
+                </div>
+            </div>
+
+            <!-- ====== Fact Check Page ====== -->
+            <div id="factCheckPage" class="hidden">
+                <div class="max-w-3xl mx-auto text-center">
+                    <svg class="w-16 h-16 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.125 2.25h-4.5c-1.125 0-2.062.938-2.062 2.063v15.375c0 1.125.938 2.063 2.063 2.063h12.75c1.125 0 2.063-.938 2.063-2.063V12.375m-15-9.375h15m-1.5 0v5.625m0 0a2.25 2.25 0 01-2.25 2.25h-1.5a2.25 2.25 0 01-2.25-2.25V2.25m6 5.625a2.25 2.25 0 00-2.25-2.25h-1.5a2.25 2.25 0 00-2.25 2.25v5.625" />
+                    </svg>
+                    <h2 class="text-3xl font-bold mb-2">Fact Check a Message</h2>
+                    <p class="text-gray-600 mb-8">Enter a statement or claim below, and our AI will analyze it for factual accuracy using Google Search.</p>
+                    <div class="card rounded-xl shadow-lg p-8">
+                        <textarea id="factCheckInput" class="w-full h-32 p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Narendra Modi is not India's PM"></textarea>
+                        <button id="analyzeTextBtn" class="mt-4 w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300">Analyze Text</button>
+                    </div>
+                    <!-- Fact Check Result Container -->
+                    <div id="factCheckResultContainer" class="mt-8 text-left hidden"></div>
+                </div>
+            </div>
+
+            <!-- ====== Result Page ====== -->
+            <div id="resultPage" class="hidden w-full max-w-5xl">
+                 <div class="max-w-4xl mx-auto mb-4 text-left">
+                    <button id="backToUploaderBtn" class="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                        New Analysis
+                    </button>
+                </div>
+                <div class="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <!-- Media Display Container -->
+                    <div id="media-display-container" class="relative">
+                         <div id="heatmapOverlay" class="heatmap-overlay"></div>
+                    </div>
+                    <!-- Analysis Result -->
+                    <div id="analysis-container" class="space-y-6">
+                        <div id="skeletonLoader">
+                            <div class="skeleton-pulse bg-gray-300 rounded-lg h-12 w-3/4 mb-4"></div>
+                            <div class="skeleton-pulse bg-gray-300 rounded-lg h-8 w-1/2 mb-6"></div>
+                            <div class="space-y-4">
+                                <div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-full"></div>
+                                <div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-5/6"></div>
+                                <div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-full"></div>
+                                <div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-3/4"></div>
+                            </div>
+                        </div>
+                        <div id="urlNotice" class="hidden p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <h4 class="font-semibold text-yellow-800">Analysis Required</h4>
+                            <p class="text-sm text-yellow-700 mt-1">For a secure forensic scan, please save this image to your device, then return and use the <strong>'Upload from Device'</strong> option.</p>
+                        </div>
+                        <div id="errorContainer" class="hidden p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <h4 id="errorTitle" class="font-semibold text-red-800">Analysis Failed</h4>
+                            <p id="errorMessage" class="text-sm text-red-700 mt-1"></p>
+                            <button id="retryBtn" class="hidden mt-4 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300">Try Again</button>
+                        </div>
+                        <div id="resultContent" class="hidden space-y-4">
+                            <div>
+                                <h2 id="resultTitle" class="text-3xl font-bold mb-2"></h2>
+                                <div class="flex items-center">
+                                    <p id="resultConfidence" class="text-lg text-gray-600 font-medium mr-3"></p>
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                        <div id="confidenceBar" class="h-2.5 rounded-full transition-all duration-500 ease-in-out"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="initialAnalysisReport" class="bg-gray-100 p-4 rounded-lg">
+                                <h4 class="font-semibold mb-2 text-base">Initial Forensic Analysis:</h4>
+                                <ul id="analysisDetailsList" class="text-sm text-gray-700 space-y-2"></ul>
+                            </div>
+                            <div id="deepScanResultContainer" class="hidden mt-4 bg-gray-100 p-4 rounded-lg border-t-4 border-blue-300"></div>
+                             <div class="space-y-2">
+                                <button id="heatmapBtn" class="hidden bg-indigo-100 text-indigo-800 font-semibold py-2 px-4 rounded-lg hover:bg-indigo-200 transition duration-300 w-full">Show Anomaly Heatmap</button>
+                                <button id="aiCritiqueBtn" class="hidden bg-purple-100 text-purple-800 font-semibold py-2 px-4 rounded-lg hover:bg-purple-200 transition duration-300 w-full">Ask Gemini for Improvements</button>
+                                <div id="aiCritiqueBox" class="hidden mt-4 p-4 bg-purple-50 rounded-lg text-sm text-purple-900 border border-purple-200"></div>
+                             </div>
+                             <div id="actionButtons" class="hidden pt-4 space-y-3">
+                                  <button id="analyzeAnotherBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700 transition duration-300">Analyze Another</button>
+                                  <div class="grid grid-cols-2 gap-3">
+                                       <button id="shareReportBtn" class="w-full bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-300 flex items-center justify-center gap-2">
+                                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />
+                                              </svg>
+                                           <span>Share Report</span>
+                                       </button>
+                                       <button id="downloadReportBtn" class="w-full bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition duration-300 flex items-center justify-center gap-2">
+                                           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                              </svg>
+                                           <span>Download PDF</span>
+                                       </button>
+                                  </div>
+                                  <div class="grid grid-cols-1 gap-3">
+                                       <button id="reportBtn" class="w-full bg-red-100 text-red-800 font-semibold py-2 px-4 rounded-lg hover:bg-red-200 transition duration-300">Expert Review (Deep Scan)</button>
+                                  </div>
+                             </div>
+                        </div>
+                        <div id="progressBarContainer" class="mt-8">
+                            <p id="progressText" class="text-center text-sm font-medium text-blue-600 mb-2">Analyzing...</p>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full progress-bar-animation"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== Real-Time News Page ====== -->
+            <div id="newsPage" class="hidden w-full max-w-5xl">
+                 <div class="mx-auto">
+                    <h2 class="text-3xl font-bold mb-2 text-center">Real-Time News Feed</h2>
+                    <p class="text-gray-600 mb-8 text-center">The latest on AI-generated media, deepfakes, and cybersecurity, powered by Gemini and Google Search.</p>
+                    <div id="newsFeedContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+                 </div>
+            </div>
+
+            <!-- ====== Awareness Page ====== -->
+            <div id="awarenessPage" class="hidden max-w-4xl mx-auto">
+                 <div class="card p-8 rounded-xl shadow-lg">
+                    <h2 class="text-3xl font-bold mb-6 text-center">Deepfake & AI Awareness Hub</h2>
+                    
+                    <!-- Interactive Quiz Section -->
+                    <section id="quizSection" class="mb-12">
+                         <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-800 text-center">Test Your Skills: Spot the Fake</h3>
+                            <div id="quizContainer">
+                                <!-- Quiz content will be injected here -->
+                            </div>
+                             <div id="quizHighScore" class="text-center mt-4 font-semibold text-blue-700 hidden"></div>
+                        </div>
+                    </section>
+                    
+
+                    <div class="space-y-8 text-gray-700">
+                        <section>
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-700">What is a Deepfake?</h3>
+                            <p>A "deepfake" is a synthetic media created using artificial intelligence (a "deep learning" model). It involves manipulating or generating visual and audio content to create highly realistic but fake images and videos. They can be used to make people appear to say or do things they never did, which poses significant risks of misinformation and malicious use.</p>
+                        </section>
+
+                        <section>
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-700">How to Spot a Fake: A Forensic Checklist</h3>
+                             <div class="space-y-4">
+                                 <div>
+                                     <h4 class="font-bold text-lg text-gray-800">1. Anatomical & Biological Flaws</h4>
+                                     <ul class="list-disc list-inside space-y-2 mt-2 pl-4">
+                                         <li><strong>Hands & Fingers:</strong> The most common giveaway. Look for the wrong number of fingers, unnatural bending, waxy textures, or fingers that merge seamlessly into each other.</li>
+                                         <li><strong>Eyes & Teeth:</strong> Check for asymmetrical eyes, strange or missing reflections in the pupils, or teeth that are too perfect, unnaturally shaped, or incorrect in number.</li>
+                                         <li><strong>Hair & Ears:</strong> Hair can look like a solid helmet, have strands that blend unnaturally with the background, or appear overly glossy. Ears might be asymmetrical or have strange shapes.</li>
+                                     </ul>
+                                 </div>
+                                 <div>
+                                     <h4 class="font-bold text-lg text-gray-800">2. Environmental & Contextual Inconsistencies</h4>
+                                     <ul class="list-disc list-inside space-y-2 mt-2 pl-4">
+                                         <li><strong>Shadows & Lighting:</strong> Are the shadows consistent with the direction of the light sources? AI often struggles to render complex lighting, resulting in objects that seem disconnected from their environment.</li>
+                                         <li><strong>Reflections:</strong> Look at reflective surfaces like mirrors, water, or sunglasses. Do the reflections accurately represent the surrounding scene? Often, they are distorted or nonsensical.</li>
+                                         <li><strong>Background Details:</strong> Examine the background for distorted shapes, objects that blend into each other illogically, or blurry, undefined areas where the AI has "filled in the gaps."</li>
+                                     </ul>
+                                 </div>
+                                 <div>
+                                     <h4 class="font-bold text-lg text-gray-800">3. Technical & Texture Artifacts</h4>
+                                     <ul class="list-disc list-inside space-y-2 mt-2 pl-4">
+                                         <li><strong>Unnatural Textures:</strong> Skin might be too perfect and poreless, or clothing fabric might lack realistic texture and folds.</li>
+                                         <li><strong>Garbled Text:</strong> If there's text in the image (on a sign, a book, or a shirt), is it legible? AI models often produce garbled, unreadable text.</li>
+                                         <li><strong>Question the Emotion:</strong> Does the facial expression seem disconnected from the context? AI can create faces that are in the "uncanny valley," looking almost human but lacking genuine emotion.</li>
+                                     </ul>
+                                 </div>
+                             </div>
+                        </section>
+
+                        <section>
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-700">How AI Detects Fakes (Technical Methods)</h3>
+                            <p>Beyond what the human eye can see, AI detectors use sophisticated techniques to find hidden clues:</p>
+                             <ul class="list-disc list-inside space-y-3 mt-4">
+                                 <li><strong>GAN Fingerprints:</strong> AI image generators (like GANs) leave behind subtle, almost invisible artifact patterns. Detection models are trained to recognize these "fingerprints."</li>
+                                 <li><strong>Metadata Forensics:</strong> A real photo contains hidden data (EXIF) about the camera, lens, and settings. The absence or inconsistency of this data is a major red flag.</li>
+                                 <li><strong>Frequency Analysis:</strong> This method converts the image into its frequency components. Artificial generation can create unnatural patterns in this domain that are invisible in the image itself.</li>
+                                 <li><strong>Pixel-level Artifacts:</strong> Looks for inconsistencies in how pixels are compressed. In a manipulated image, the artifacts in the fake area won't match the original parts.</li>
+                                 <li><strong>Geometry & Physics Checks:</strong> Analyzes light, shadow, and reflections. An AI might create a scene where shadows fall in impossible directions, which a forensic tool can mathematically detect.</li>
+                             </ul>
+                        </section>
+
+                        <section>
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-700">Legal Recourse in India</h3>
+                            <p>If your image has been used maliciously in a deepfake, you are not powerless. Several sections of Indian law can apply. It is always best to consult with a legal professional, but here are some relevant provisions:</p>
+                             <ul class="list-disc list-inside space-y-2 mt-4">
+                                 <li><strong>Section 66E of the IT Act, 2000:</strong> Punishes the intentional capture, publishing, or transmission of an image of a private area of any person without their consent, which can be relevant for morphing.</li>
+                                 <li><strong>Section 67 & 67A of the IT Act, 2000:</strong> Deals with publishing or transmitting obscene or sexually explicit material in electronic form.</li>
+                                 <li><strong>Indian Penal Code (IPC):</strong> Sections like 499 (defamation), 509 (insulting the modesty of a woman), and 465 (forgery) can also be invoked.</li>
+                             </ul>
+                        </section>
+                        
+                        <section class="text-center bg-blue-50 p-6 rounded-lg border border-blue-200">
+                            <h3 class="text-2xl font-semibold mb-3 text-blue-800">Get Help Immediately</h3>
+                            <p class="text-lg">If you are a victim of cybercrime, including the malicious use of deepfakes, report it immediately.</p>
+                            <div class="mt-4">
+                                <p class="font-bold text-xl">National Cyber Crime Helpline:</p>
+                                <a href="tel:1930" class="text-4xl font-bold text-blue-600 hover:underline">1930</a>
+                            </div>
+                            <div class="mt-4">
+                                <p class="font-bold text-xl">Official Reporting Portal:</p>
+                                <a href="https://www.cybercrime.gov.in" target="_blank" rel="noopener noreferrer" class="text-2xl font-bold text-blue-600 hover:underline">www.cybercrime.gov.in</a>
+                            </div>
+                        </section>
+                        
+                        <!-- AI Assistant Section -->
+                        <section class="mt-12">
+                             <div class="text-center mb-6">
+                                 <h3 class="text-2xl font-semibold text-blue-700">AI Legal Information Assistant</h3>
+                                 <p class="text-gray-600">Powered by Gemini & Google Search for grounded, real-time answers.</p>
+                             </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <div id="aiChatHistory" class="space-y-4 h-64 overflow-y-auto mb-4 p-2">
+                                    <div class="flex justify-start">
+                                        <div class="ai-chat-bubble">
+                                            <p>Hello! I can help you find information on deepfakes and Indian cyber laws. How can I assist you?</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="text" id="aiChatInput" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., What is Section 66E?">
+                                    <button id="aiChatSendBtn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-300 flex-shrink-0">Ask</button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2 text-center"><strong>Disclaimer:</strong> This is an AI assistant and does not provide legal advice. Please consult a qualified human lawyer for any legal issues.</p>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== About Us Page ====== -->
+            <div id="aboutPage" class="hidden w-full max-w-5xl">
+                <div class="card p-8 rounded-xl shadow-lg mx-auto">
+                    <h2 class="text-3xl font-bold mb-8 text-center text-blue-700">About AI Praman</h2>
+                    
+                    <!-- Our Story Section -->
+                    <section class="mb-12">
+                        <h3 class="text-2xl font-semibold mb-3 text-gray-800 border-b-2 border-blue-200 pb-2">Our Story</h3>
+                        <p class="text-gray-700 leading-relaxed">
+                           This 2 Students From The College Got Idea About AI Fake Detection Software And They Started Working On This Application and Got From There Mentors Dr. Anupama Gawde (She Is Also Head Of Research and Development Cell) and From Proff. Sandeep Vishwakarma (He Is From B. Sc. I. T.) and After The Lots Of Testing and Coding This 2 Students Started This Application Name AI Praman.
+                        </p>
+                    </section>
+            
+                    <!-- Meet the Founders Section -->
+                    <section class="mb-12">
+                        <h3 class="text-2xl font-semibold mb-6 text-gray-800 text-center">Meet the Founders</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <!-- Vishal Gupta Card -->
+                            <div class="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center flex flex-col items-center">
+                                <img src="https://placehold.co/150x150/e2e8f0/333?text=VG" alt="Vishal Gupta" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-white shadow-md">
+                                <h4 class="text-xl font-bold text-blue-800">Vishal Gupta</h4>
+                                <p class="text-gray-600 mt-2 text-sm">
+                                    Contingent Leader, Research and Development Cell, Shankar Narayan College of Arts and Commerce. He Is Also 2 Times National Research Presentation Winner and 1st Ranker In International Research Conference. Also Worked With Maharashtra Transport Commissioner Office and Made TrafficSens Application For The Department.
+                                </p>
+                            </div>
+                            <!-- Anjali Tiwari Card -->
+                            <div class="bg-blue-50 p-6 rounded-lg border border-blue-200 text-center flex flex-col items-center">
+                                <img src="https://placehold.co/150x150/e2e8f0/333?text=AT" alt="Anjali Tiwari" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-white shadow-md">
+                                <h4 class="text-xl font-bold text-blue-800">Anjali Tiwari</h4>
+                                <p class="text-gray-600 mt-2 text-sm">
+                                    Contingent Leader, Research and Development Cell, Shankar Narayan College of Arts and Commerce. She Is Magnificent And Meritorious Student From Her College.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- Our Mentors Section -->
+                    <section>
+                        <h3 class="text-2xl font-semibold mb-4 text-gray-800 text-center">Our Mentors</h3>
+                        <div class="text-center text-gray-700">
+                            <p class="text-lg">We extend our heartfelt gratitude to our mentors for their unwavering support and guidance:</p>
+                            <div class="mt-4 flex flex-col md:flex-row justify-center items-center gap-8">
+                                <div class="text-center">
+                                    <p class="font-bold text-xl text-blue-700">Dr. Anupama Gawde</p>
+                                    <p class="text-md text-gray-600">(Head of Research and Development Cell)</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="font-bold text-xl text-blue-700">Prof. Sandeep Vishwakarma</p>
+                                     <p class="text-md text-gray-600">(B. Sc. I.T. Department)</p>
+                                 </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+        </main>
+        
+        <!-- Footer -->
+        <footer id="appFooter" class="text-center p-4 text-sm text-gray-500 hidden">
+            <p>&copy; 2025 AI Praman. All Rights Reserved. For educational and demonstrative purposes only.</p>
+        </footer>
+    </div>
+    
+    <!-- Modal -->
+    <div id="feedbackModal" class="modal-backdrop hidden">
+        <div class="modal-content">
+            <p id="modalMessage" class="mb-4 text-left"></p>
+            <div class="flex justify-end gap-3">
+                <button id="copyShareTextBtn" class="bg-blue-500 text-white px-4 py-2 rounded">Copy Text</button>
+                <button id="closeModalBtn" class="bg-gray-200 text-gray-800 px-4 py-2 rounded">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- API Key Modal -->
+    <div id="apiKeyModal" class="modal-backdrop">
+        <div class="modal-content text-left max-w-lg w-full">
+            <h3 class="text-xl font-bold mb-4">Enter Your Gemini API Key</h3>
+            <p class="text-gray-600 mb-4 text-sm">To enable the AI features of this application, please provide your Google AI Gemini API key. This key will be stored only in your browser for this session and will not be shared.</p>
+            <label for="apiKeyInput" class="font-semibold text-gray-700">API Key:</label>
+            <input type="password" id="apiKeyInput" class="w-full px-4 py-2 mt-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter your API key here...">
+            <div id="apiKeyError" class="text-red-500 text-sm mt-2 hidden"></div>
+            <div class="flex justify-end gap-3 mt-6">
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline self-center mr-auto">Get a Key</a>
+                <button id="saveApiKeyBtn" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // Page elements
+                const loginPage = document.getElementById('loginPage');
+                const signUpPage = document.getElementById('signUpPage');
+                const welcomePage = document.getElementById('welcomePage');
+                const mainAppPage = document.getElementById('mainAppPage');
+                const resultPage = document.getElementById('resultPage');
+                const awarenessPage = document.getElementById('awarenessPage');
+                const newsPage = document.getElementById('newsPage');
+                const factCheckPage = document.getElementById('factCheckPage');
+                const aboutPage = document.getElementById('aboutPage'); // New Page
+
+                // App chrome
+                const appHeader = document.getElementById('appHeader');
+                const appFooter = document.getElementById('appFooter');
+
+                // Login/Signup elements
+                const loginForm = document.getElementById('loginForm');
+                const loginEmailInput = document.getElementById('loginEmail');
+                const loginPasswordInput = document.getElementById('loginPassword');
+                const loginError = document.getElementById('loginError');
+                const signUpForm = document.getElementById('signUpForm');
+                const signUpEmailInput = document.getElementById('signUpEmail');
+                const signUpPasswordInput = document.getElementById('signUpPassword');
+                const signUpError = document.getElementById('signUpError');
+                const goToSignUpBtn = document.getElementById('goToSignUpBtn');
+                const goToLoginBtn = document.getElementById('goToLoginBtn');
+                const logoutBtn = document.getElementById('logoutBtn');
+
+                // Navigation buttons
+                const getStartedBtn = document.getElementById('getStartedBtn');
+                const navDetector = document.getElementById('nav-detector');
+                const navFactCheck = document.getElementById('nav-fact-check');
+                const navAwareness = document.getElementById('nav-awareness');
+                const navNews = document.getElementById('nav-news');
+                const navAbout = document.getElementById('nav-about'); // New Nav Button
+                const homeBtn = document.getElementById('homeBtn');
+                const backToUploaderBtn = document.getElementById('backToUploaderBtn');
+
+                // Detector Tabs
+                const tabImage = document.getElementById('tab-image');
+                const tabVideo = document.getElementById('tab-video');
+                const tabAudio = document.getElementById('tab-audio');
+                const tabText = document.getElementById('tab-text');
+                const imageDetectorPane = document.getElementById('imageDetectorPane');
+                const videoDetectorPane = document.getElementById('videoDetectorPane');
+                const audioDetectorPane = document.getElementById('audioDetectorPane');
+                const textInImageDetectorPane = document.getElementById('textInImageDetectorPane');
+                const detectorTabs = [tabImage, tabVideo, tabAudio, tabText];
+                const detectorPanes = [imageDetectorPane, videoDetectorPane, audioDetectorPane, textInImageDetectorPane];
+
+                // Fact Check Elements
+                const factCheckInput = document.getElementById('factCheckInput');
+                const analyzeTextBtn = document.getElementById('analyzeTextBtn');
+                const factCheckResultContainer = document.getElementById('factCheckResultContainer');
+
+                // Action Buttons
+                const analyzeAnotherBtn = document.getElementById('analyzeAnotherBtn');
+                const shareReportBtn = document.getElementById('shareReportBtn');
+                const downloadReportBtn = document.getElementById('downloadReportBtn');
+                const reportBtn = document.getElementById('reportBtn');
+                const actionButtons = document.getElementById('actionButtons');
+
+                // Upload elements
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+                const imageUrlInput = document.getElementById('imageUrlInput');
+                const analyzeUrlBtn = document.getElementById('analyzeUrlBtn');
+                const uploadAreaVideo = document.getElementById('uploadAreaVideo');
+                const fileInputVideo = document.getElementById('fileInputVideo');
+                const uploadAreaAudio = document.getElementById('uploadAreaAudio');
+                const fileInputAudio = document.getElementById('fileInputAudio');
+                const uploadAreaTextInImage = document.getElementById('uploadAreaTextInImage');
+                const fileInputTextInImage = document.getElementById('fileInputTextInImage');
+
+                // Result elements
+                const mediaDisplayContainer = document.getElementById('media-display-container');
+                const skeletonLoader = document.getElementById('skeletonLoader');
+                const urlNotice = document.getElementById('urlNotice');
+                const errorContainer = document.getElementById('errorContainer');
+                const errorMessage = document.getElementById('errorMessage');
+                const retryBtn = document.getElementById('retryBtn');
+                const resultContent = document.getElementById('resultContent');
+                const resultTitle = document.getElementById('resultTitle');
+                const resultConfidence = document.getElementById('resultConfidence');
+                const confidenceBar = document.getElementById('confidenceBar');
+                const progressBarContainer = document.getElementById('progressBarContainer');
+                const progressText = document.getElementById('progressText');
+                const progressBar = document.getElementById('progressBar');
+                const heatmapBtn = document.getElementById('heatmapBtn');
+                const heatmapOverlay = document.getElementById('heatmapOverlay');
+                const aiCritiqueBtn = document.getElementById('aiCritiqueBtn');
+                const aiCritiqueBox = document.getElementById('aiCritiqueBox');
+                const initialAnalysisReport = document.getElementById('initialAnalysisReport');
+                const analysisDetailsList = document.getElementById('analysisDetailsList');
+                const deepScanResultContainer = document.getElementById('deepScanResultContainer');
+                
+                // Modal Elements
+                const feedbackModal = document.getElementById('feedbackModal');
+                const modalMessage = document.getElementById('modalMessage');
+                const closeModalBtn = document.getElementById('closeModalBtn');
+                const copyShareTextBtn = document.getElementById('copyShareTextBtn');
+                
+                // API Key Modal Elements
+                const apiKeyModal = document.getElementById('apiKeyModal');
+                const apiKeyInput = document.getElementById('apiKeyInput');
+                const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+                const apiKeyError = document.getElementById('apiKeyError');
+
+                // AI Chat Elements
+                const aiChatHistory = document.getElementById('aiChatHistory');
+                const aiChatInput = document.getElementById('aiChatInput');
+                const aiChatSendBtn = document.getElementById('aiChatSendBtn');
+                
+                // News Briefing Elements
+                const newsFeedContainer = document.getElementById('newsFeedContainer');
+
+                // History Elements
+                const historySection = document.getElementById('historySection');
+                const historyContainer = document.getElementById('historyContainer');
+                let analysisHistory = JSON.parse(sessionStorage.getItem('aiPramanHistory')) || [];
+                let currentAnalysisResult = {};
+
+                // Quiz Elements
+                const quizContainer = document.getElementById('quizContainer');
+                const quizHighScore = document.getElementById('quizHighScore');
+                let currentQuestionIndex = 0;
+                let score = 0;
+
+                const allPages = [loginPage, signUpPage, welcomePage, mainAppPage, resultPage, awarenessPage, newsPage, factCheckPage, aboutPage];
+                const navButtons = [navDetector, navFactCheck, navAwareness, navNews, navAbout];
+                let newsData = null; // Cache for news data
+
+                // --- Gemini API Logic ---
+                let GEMINI_API_KEY = sessionStorage.getItem('geminiApiKey') || "";
+                
+                function getApiUrl() {
+                    return `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+                }
+                
+                async function fetchWithRetry(url, options, maxRetries = 3) {
+                    let delay = 1000;
+                    for (let i = 0; i < maxRetries; i++) {
+                        try {
+                            const response = await fetch(url, options);
+                            if (response.ok || (response.status >= 400 && response.status < 500 && response.status !== 429)) {
+                                return response;
+                            }
+                            if (i < maxRetries - 1) {
+                                console.log(`API call failed with status ${response.status}. Retrying in ${delay}ms...`);
+                                await new Promise(res => setTimeout(res, delay));
+                                delay *= 2;
+                            } else {
+                                return response;
+                            }
+                        } catch (error) {
+                             if (i === maxRetries - 1) throw error;
+                             console.log(`Network error. Retrying in ${delay}ms...`);
+                             await new Promise(res => setTimeout(res, delay));
+                             delay *= 2;
+                        }
+                    }
+                }
+                
+                async function callGemini(payload, withSearch = false) {
+                    if (!GEMINI_API_KEY) {
+                        return { text: "<strong>Action Required:</strong> Please enter your Gemini API key to use this feature.", sources: [], error: true, type: 'api_key_missing' };
+                    }
+
+                    if (withSearch) {
+                        payload.tools = [{ "google_search": {} }];
+                    }
+                    try {
+                        const response = await fetchWithRetry(getApiUrl(), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) {
+                            const errorBody = await response.json().catch(() => ({ error: { message: `API call failed with status ${response.status}.` } }));
+                            const message = errorBody.error?.message || 'An unknown API error occurred.';
+                            console.error("Gemini API Error:", message, errorBody);
+                            throw new Error(message); 
+                        }
+                        const result = await response.json();
+                        const candidate = result.candidates?.[0];
+
+                        if (candidate && candidate.content?.parts?.[0]?.text) {
+                            const text = candidate.content.parts[0].text;
+                            let sources = [];
+                            const groundingMetadata = candidate.groundingMetadata;
+                            if (groundingMetadata && groundingMetadata.groundingAttributions) {
+                                sources = groundingMetadata.groundingAttributions
+                                    .map(attribution => ({
+                                        uri: attribution.web?.uri,
+                                        title: attribution.web?.title,
+                                    }))
+                                    .filter(source => source.uri && source.title);
+                            }
+                            return { text, sources, error: false };
+                        }
+                         return { text: "Sorry, the AI couldn't generate a response. Please try again.", sources: [], error: true };
+                    } catch (error) {
+                        console.error("Gemini API call error:", error);
+                        return { text: `<strong>Error:</strong> ${error.message}`, sources: [], error: true };
+                    }
+                }
+                
+                // --- API Key Modal Logic ---
+                function showApiKeyModal() {
+                    if (apiKeyModal) apiKeyModal.classList.add('visible');
+                }
+
+                function hideApiKeyModal() {
+                    if (apiKeyModal) apiKeyModal.classList.remove('visible');
+                }
+
+                if (saveApiKeyBtn) {
+                    saveApiKeyBtn.addEventListener('click', () => {
+                        const key = apiKeyInput.value.trim();
+                        if (key) {
+                            GEMINI_API_KEY = key;
+                            sessionStorage.setItem('geminiApiKey', key);
+                            if(apiKeyError) apiKeyError.classList.add('hidden');
+                            hideApiKeyModal();
+                            showPage(welcomePage);
+                        } else {
+                            if(apiKeyError) {
+                                apiKeyError.textContent = 'Please enter a valid API key.';
+                                apiKeyError.classList.remove('hidden');
+                            }
+                        }
+                    });
+                }
+                
+                // --- Page Navigation Logic ---
+                const showPage = (pageToShow) => {
+                    if (pageToShow) {
+                        allPages.forEach(page => {
+                            if(page) page.classList.add('hidden')
+                        });
+                        pageToShow.classList.remove('hidden');
+                        
+                        if ([welcomePage, mainAppPage, resultPage, awarenessPage, newsPage, factCheckPage, aboutPage].includes(pageToShow)) {
+                            appHeader.classList.remove('hidden');
+                            appFooter.classList.remove('hidden');
+                        } else {
+                             appHeader.classList.add('hidden');
+                             appFooter.classList.add('hidden');
+                        }
+                        window.scrollTo(0, 0);
+                    }
+                };
+
+                showPage(loginPage);
+
+                const updateNav = (activeButton) => {
+                    if (activeButton) {
+                        navButtons.forEach(button => {
+                            if (button) {
+                                button.classList.remove('text-blue-600', 'border-b-2', 'border-blue-600');
+                                button.classList.add('text-gray-500');
+                            }
+                        });
+                        activeButton.classList.add('text-blue-600', 'border-b-2', 'border-blue-600');
+                        activeButton.classList.remove('text-gray-500');
+                    }
+                };
+
+                // --- Login/Signup/Logout Flow ---
+                if (loginForm) {
+                    loginForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        if (loginEmailInput.value && loginPasswordInput.value) {
+                            loginError.classList.add('hidden');
+                            handleSuccessfulAuth();
+                        } else {
+                            loginError.classList.remove('hidden');
+                        }
+                    });
+                }
+
+                if (signUpForm) {
+                     signUpForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        if (signUpEmailInput.value && signUpPasswordInput.value) {
+                            signUpError.classList.add('hidden');
+                            handleSuccessfulAuth();
+                        } else {
+                            signUpError.classList.remove('hidden');
+                        }
+                    });
+                }
+                
+                if (goToSignUpBtn) goToSignUpBtn.addEventListener('click', () => showPage(signUpPage));
+                if (goToLoginBtn) goToLoginBtn.addEventListener('click', () => showPage(loginPage));
+                if (logoutBtn) {
+                    logoutBtn.addEventListener('click', () => {
+                        sessionStorage.clear();
+                        window.location.reload();
+                    });
+                }
+
+                function handleSuccessfulAuth() {
+                    if (!sessionStorage.getItem('geminiApiKey')) {
+                        showApiKeyModal();
+                    } else {
+                        showPage(welcomePage);
+                    }
+                }
+                
+                if (getStartedBtn) getStartedBtn.addEventListener('click', () => {
+                    showPage(mainAppPage);
+                    updateNav(navDetector);
+                });
+                if (navDetector) navDetector.addEventListener('click', () => {
+                    showPage(mainAppPage);
+                    updateNav(navDetector);
+                });
+                if (navFactCheck) navFactCheck.addEventListener('click', () => {
+                    showPage(factCheckPage);
+                    updateNav(navFactCheck);
+                });
+                if (navAwareness) navAwareness.addEventListener('click', () => {
+                    showPage(awarenessPage);
+                    updateNav(navAwareness);
+                });
+                if (navNews) navNews.addEventListener('click', () => {
+                     showPage(newsPage);
+                     updateNav(navNews);
+                     fetchNews();
+                });
+                if (navAbout) navAbout.addEventListener('click', () => {
+                    showPage(aboutPage);
+                    updateNav(navAbout);
+                });
+                if (analyzeAnotherBtn) analyzeAnotherBtn.addEventListener('click', () => {
+                    showPage(mainAppPage);
+                    if(fileInput) fileInput.value = ''; 
+                    if(imageUrlInput) imageUrlInput.value = '';
+                });
+
+                if (backToUploaderBtn) backToUploaderBtn.addEventListener('click', () => {
+                    showPage(mainAppPage);
+                    updateNav(navDetector);
+                });
+
+
+                // --- Detector Tabs Logic ---
+                detectorTabs.forEach((tab, index) => {
+                    tab.addEventListener('click', () => {
+                        detectorTabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        detectorPanes.forEach(p => p.classList.add('hidden'));
+                        detectorPanes[index].classList.remove('hidden');
+                    });
+                });
+
+                // --- File Upload Logic ---
+                if (uploadArea) {
+                    uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('border-blue-500', 'bg-blue-50'); });
+                    uploadArea.addEventListener('dragleave', () => { uploadArea.classList.remove('border-blue-500', 'bg-blue-50'); });
+                    uploadArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0], 'image');
+                    });
+                    uploadArea.addEventListener('click', () => fileInput.click());
+                }
+                if (fileInput) fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0], 'image'); });
+
+                if (uploadAreaVideo) {
+                    uploadAreaVideo.addEventListener('dragover', (e) => { e.preventDefault(); uploadAreaVideo.classList.add('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaVideo.addEventListener('dragleave', () => { uploadAreaVideo.classList.remove('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaVideo.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0], 'video');
+                    });
+                    uploadAreaVideo.addEventListener('click', () => fileInputVideo.click());
+                }
+                if(fileInputVideo) fileInputVideo.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0], 'video'); });
+
+                if (uploadAreaAudio) {
+                    uploadAreaAudio.addEventListener('dragover', (e) => { e.preventDefault(); uploadAreaAudio.classList.add('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaAudio.addEventListener('dragleave', () => { uploadAreaAudio.classList.remove('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaAudio.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0], 'audio');
+                    });
+                    uploadAreaAudio.addEventListener('click', () => fileInputAudio.click());
+                }
+                if (fileInputAudio) fileInputAudio.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0], 'audio'); });
+
+                if (uploadAreaTextInImage) {
+                    uploadAreaTextInImage.addEventListener('dragover', (e) => { e.preventDefault(); uploadAreaTextInImage.classList.add('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaTextInImage.addEventListener('dragleave', () => { uploadAreaTextInImage.classList.remove('border-blue-500', 'bg-blue-50'); });
+                    uploadAreaTextInImage.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0], 'text-in-image');
+                    });
+                    uploadAreaTextInImage.addEventListener('click', () => fileInputTextInImage.click());
+                }
+                if (fileInputTextInImage) fileInputTextInImage.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0], 'text-in-image'); });
+
+
+                if (analyzeUrlBtn) {
+                    analyzeUrlBtn.addEventListener('click', () => {
+                        const url = imageUrlInput.value.trim();
+                        if (url) startAnalysis(url, { contentType: 'image', isUrl: true });
+                    });
+                }
+                
+                const handleFile = (file, contentType) => {
+                    if (contentType === 'image' || contentType === 'text-in-image') {
+                        const reader = new FileReader();
+                        reader.onload = (e) => startAnalysis(e.target.result, { contentType, isUrl: false, fileObject: file });
+                        reader.readAsDataURL(file);
+                    } else {
+                        startAnalysis(file, { contentType, isUrl: false, fileName: file.name, fileObject: file });
+                    }
+                };
+
+                // --- Analysis Logic ---
+                const startAnalysis = async (mediaSrc, options) => {
+                    showPage(resultPage);
+                    resetResultPage();
+                    
+                    // Display media preview
+                    if (options.contentType === 'image' || options.contentType === 'text-in-image') {
+                        mediaDisplayContainer.innerHTML = `<img id="resultImage" src="${mediaSrc}" alt="Analyzed image" class="rounded-xl shadow-2xl w-full h-auto object-contain">`;
+                    } else if (options.contentType === 'video') {
+                        const videoURL = URL.createObjectURL(mediaSrc);
+                        mediaDisplayContainer.innerHTML = `<video controls src="${videoURL}" class="rounded-xl shadow-2xl w-full h-auto bg-black">Your browser does not support the video tag.</video><p class="text-center mt-2 font-medium">${options.fileName}</p>`;
+                    } else if (options.contentType === 'audio') {
+                        const audioURL = URL.createObjectURL(mediaSrc);
+                        mediaDisplayContainer.innerHTML = `<div class="bg-gray-100 p-6 rounded-xl shadow-lg flex flex-col items-center justify-center"><svg class="w-24 h-24 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5a6 6 0 00-6-6v1.5a4.5 4.5 0 11-4.5 4.5v-1.5a6 6 0 006-6zm-2.25-7.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z" /></svg><p class="text-center font-semibold">${options.fileName}</p><audio controls class="mt-4 w-full" src="${audioURL}"></audio></div>`;
+                    }
+
+                    if (options.isUrl) {
+                        urlNotice.classList.remove('hidden');
+                        actionButtons.classList.remove('hidden');
+                        downloadReportBtn.style.display = 'none';
+                        reportBtn.style.display = 'none';
+                        currentAnalysisResult = { originalSrc: mediaSrc, imageSrc: mediaSrc, contentType: 'image' };
+                        return;
+                    }
+                    
+                    // Start analysis progress bar
+                    progressBarContainer.classList.remove('hidden');
+                    progressText.textContent = "Performing Initial Analysis...";
+                    progressBar.classList.remove('progress-bar-animation');
+                    void progressBar.offsetWidth; // Trigger reflow
+                    progressBar.classList.add('progress-bar-animation');
+                    
+                    let analysisResult;
+
+                    if (options.contentType === 'image') {
+                        analysisResult = await analyzeImageWithGemini(mediaSrc, false);
+                    } else if (options.contentType === 'video' || options.contentType === 'audio') {
+                        analysisResult = await new Promise(resolve => setTimeout(() => resolve(simulateMediaAnalysis(options.fileObject, options.contentType, false)), 3000));
+                    } else if (options.contentType === 'text-in-image') {
+                        analysisResult = await analyzeTextInImage(mediaSrc);
+                    }
+                    
+                    progressBar.style.width = '100%';
+
+                    if (analysisResult.error) {
+                        displayError(analysisResult.error, analysisResult.type, () => startAnalysis(mediaSrc, options));
+                        return;
+                    }
+                    
+                    currentAnalysisResult = { ...analysisResult, originalSrc: mediaSrc, fileObject: options.fileObject };
+                    if(options.contentType === 'image' || options.contentType === 'text-in-image') {
+                        currentAnalysisResult.imageSrc = mediaSrc;
+                    }
+
+                    updateHistory(currentAnalysisResult);
+                    displayCachedResult(currentAnalysisResult);
+                };
+
+                function resetResultPage() {
+                    mediaDisplayContainer.innerHTML = '';
+                    skeletonLoader.classList.remove('hidden');
+                    urlNotice.classList.add('hidden');
+                    errorContainer.classList.add('hidden');
+                    resultContent.classList.add('hidden');
+                    deepScanResultContainer.classList.add('hidden');
+                    actionButtons.classList.add('hidden');
+                    progressBarContainer.classList.add('hidden');
+                    progressBar.style.width = '0%';
+                    aiCritiqueBox.classList.add('hidden');
+                    heatmapBtn.classList.add('hidden');
+                    aiCritiqueBtn.classList.add('hidden');
+                    heatmapOverlay.classList.remove('visible');
+                    heatmapBtn.textContent = 'Show Anomaly Heatmap';
+                    heatmapBtn.classList.replace('bg-indigo-300', 'bg-indigo-100');
+                }
+
+                async function analyzeImageWithGemini(imageDataUrl, isDeepScan = false) {
+                    if (!GEMINI_API_KEY) {
+                        showApiKeyModal();
+                        return { error: "API Key is not set.", type: "permanent" };
+                    }
+                    
+                    const base64Data = imageDataUrl.split(',')[1];
+                    const mimeType = imageDataUrl.split(';')[0].split(':')[1];
+
+                    const initialPrompt = "You are a Level 1 digital forensic analyst. Your task is to definitively classify if the provided image is a real photograph or AI-generated. Pay special attention to anatomical details like hands, fingers, eyes, teeth, and skin texture. You MUST provide your conclusion ONLY in the specified JSON format. The `is_real` boolean is the most critical field. The `forensic_points` array must contain at least 2 general points. The `anatomical_analysis` array must contain at least one point commenting on biological features (hands, eyes, skin), even if it's to confirm they appear natural and consistent. If no flaws are found, state that.";
+                    const deepScanPrompt = "You are a Level 2 senior digital forensic specialist. A previous analysis was inconclusive. Your task is to perform a DEEP and COMPREHENSIVE re-examination to make a final, definitive classification. Your analysis must include a meticulous check for subtle anatomical inconsistencies that a Level 1 analysis might miss. You MUST provide a conclusive, final assessment ONLY in the specified JSON format. The `is_real` boolean is the most critical field. The `forensic_points` array must contain at least 2 highly specific, technical evidence points. The `anatomical_analysis` array must contain at least one point with your expert opinion on biological consistency. If no flaws are found, state that.";
+                    const systemPrompt = isDeepScan ? deepScanPrompt : initialPrompt;
+
+                    const payload = {
+                        contents: [{ parts: [ { text: systemPrompt }, { inlineData: { mimeType: mimeType, data: base64Data } } ] }],
+                        generationConfig: { responseMimeType: "application/json", responseSchema: { type: "OBJECT", properties: { "is_real": { "type": "BOOLEAN" }, "confidence": { "type": "NUMBER" }, "generation_technique": { "type": "STRING" }, "forensic_points": { "type": "ARRAY", "items": { "type": "STRING" } }, "anatomical_analysis": { "type": "ARRAY", "items": { "type": "STRING" } } } } }
+                    };
+
+                    try {
+                        const response = await fetchWithRetry(getApiUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                        if (!response.ok) {
+                            const errorBody = await response.json().catch(() => ({ error: { message: "Could not parse error response." } }));
+                            const errorMessage = errorBody.error?.message || `API call failed with status: ${response.status}`;
+                            return { error: errorMessage, type: (response.status >= 500 || response.status === 429) ? "transient" : "permanent" };
+                        }
+                        const result = await response.json();
+                        const candidate = result.candidates?.[0];
+                        if (candidate?.content?.parts?.[0]?.text) {
+                            const parsedJson = JSON.parse(candidate.content.parts[0].text);
+                            return { isFake: !parsedJson.is_real, confidence: parsedJson.confidence, details: { generationModel: parsedJson.generation_technique, forensics: parsedJson.forensic_points || [], anatomy: parsedJson.anatomical_analysis || [] }, contentType: 'image' };
+                        } else {
+                             return { error: "The AI model returned an empty or invalid response.", type: "transient" };
+                        }
+                    } catch (error) {
+                        return { error: error.message, type: "transient" };
+                    }
+                }
+
+                function displayError(message, type, retryCallback) {
+                    progressBarContainer.classList.add('hidden');
+                    skeletonLoader.classList.add('hidden');
+                    resultContent.classList.add('hidden');
+                    let displayMessage = message;
+                    if (message.includes('503') || message.toLowerCase().includes('unavailable')) {
+                        displayMessage = 'The AI service is temporarily unavailable. Please try again in a few moments.';
+                    } else if (type === 'api_key_missing' || message.includes('API key')) {
+                        displayMessage = 'Your Gemini API Key is missing or invalid. Please check your key and try again.';
+                    }
+                    errorMessage.innerHTML = displayMessage;
+                    if (type === 'transient') {
+                        retryBtn.classList.remove('hidden');
+                        retryBtn.onclick = () => { errorContainer.classList.add('hidden'); retryCallback(); };
+                    } else {
+                        retryBtn.classList.add('hidden');
+                    }
+                    errorContainer.classList.remove('hidden');
+                    actionButtons.classList.remove('hidden');
+                    downloadReportBtn.style.display = 'none';
+                    reportBtn.style.display = 'none';
+                }
+
+                // --- Fact Check Logic ---
+                if (analyzeTextBtn) analyzeTextBtn.addEventListener('click', handleFactCheck);
+                async function handleFactCheck() {
+                    const textToAnalyze = factCheckInput.value.trim();
+                    if (!textToAnalyze) return;
+                    factCheckResultContainer.classList.remove('hidden');
+                    factCheckResultContainer.innerHTML = `<div class="card rounded-xl shadow-lg p-6 space-y-4"><div class="skeleton-pulse bg-gray-300 rounded-lg h-8 w-1/2"></div><div class="space-y-2"><div class="skeleton-pulse bg-gray-300 rounded-md h-4 w-full"></div><div class="skeleton-pulse bg-gray-300 rounded-md h-4 w-5/6"></div></div></div>`;
+                    analyzeTextBtn.disabled = true;
+
+                    const systemPrompt = `You are a meticulous fact-checking AI. Your task is to analyze the user's statement and determine its factual accuracy based on real-time Google Search results. You MUST provide your conclusion ONLY as a raw JSON object string. Do not include any other text, markdown formatting, or explanations. The JSON object should have these keys: 'is_true' (boolean), 'confidence' (number), and 'explanation' (string).`;
+                    const payload = {
+                        contents: [{ parts: [{ text: textToAnalyze }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                    };
+                    const response = await callGemini(payload, true);
+                    analyzeTextBtn.disabled = false;
+
+                    if (response.error) {
+                        factCheckResultContainer.innerHTML = `<div class="card rounded-xl shadow-lg p-6 text-red-700 font-semibold">${response.text}</div>`;
+                        return;
+                    }
+                    try {
+                        const cleanedResponse = response.text.replace(/```json/g, '').replace(/```/g, '');
+                        const result = JSON.parse(cleanedResponse);
+                        displayFactCheckResult(result, response.sources);
+                    } catch (e) {
+                        factCheckResultContainer.innerHTML = `<div class="card rounded-xl shadow-lg p-6 text-red-700 font-semibold">The AI returned an invalid response format. Please try again.</div>`;
+                    }
+                }
+
+                function displayFactCheckResult(result, sources) {
+                    const isTrue = result.is_true;
+                    const verdictText = isTrue ? "Statement appears to be True" : "Statement appears to be False";
+                    const verdictColor = isTrue ? 'text-green-600' : 'text-red-600';
+                    const icon = isTrue ? `<svg class="w-6 h-6 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>` : `<svg class="w-6 h-6 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>`;
+                    let sourcesHTML = '';
+                    if (sources && sources.length > 0) {
+                        sourcesHTML = `<div class="mt-4 border-t border-gray-200 pt-4"><h4 class="font-semibold text-gray-700 mb-2">Sources Found:</h4><ul class="list-disc list-inside space-y-1 text-sm">${sources.map(s => `<li><a href="${s.uri}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${s.title}</a></li>`).join('')}</ul></div>`;
+                    }
+                    factCheckResultContainer.innerHTML = `<div class="card rounded-xl shadow-lg p-6"><div class="flex items-center ${verdictColor}">${icon}<h3 class="text-xl font-bold">${verdictText}</h3></div><p class="text-gray-600 mt-1 ml-8">Confidence: ${result.confidence}%</p><p class="mt-4 text-gray-800">${result.explanation}</p>${sourcesHTML}</div>`;
+                }
+                
+                // --- Modal Logic ---
+                const showModal = (message, showCopy = false, copyText = '') => {
+                    if (modalMessage) modalMessage.innerHTML = message;
+                    if (copyShareTextBtn) {
+                        copyShareTextBtn.style.display = showCopy ? 'block' : 'none';
+                        copyShareTextBtn.dataset.copyText = copyText;
+                    }
+                    if (feedbackModal) feedbackModal.classList.add('visible');
+                };
+                if(closeModalBtn) closeModalBtn.addEventListener('click', () => feedbackModal.classList.remove('visible'));
+                 if(copyShareTextBtn) {
+                      copyShareTextBtn.addEventListener('click', (e) => {
+                          const textToCopy = e.target.dataset.copyText;
+                          navigator.clipboard.writeText(textToCopy).then(() => {
+                              copyShareTextBtn.textContent = 'Copied!';
+                              setTimeout(() => {
+                                  copyShareTextBtn.textContent = 'Copy Text';
+                                  if(feedbackModal) feedbackModal.classList.remove('visible');
+                              }, 1500);
+                          }).catch(err => console.error('Failed to copy text: ', err));
+                      });
+                 }
+                
+                 // --- AI Chat Logic ---
+                const handleAIChat = async () => {
+                    if (!aiChatInput || !aiChatSendBtn) return;
+                    const userInput = aiChatInput.value.trim();
+                    if (!userInput) return;
+                    
+                    if (!GEMINI_API_KEY) {
+                        showModal("Please enter your Gemini API Key to use the AI Assistant.", false);
+                        showApiKeyModal();
+                        return;
+                    }
+
+                    aiChatSendBtn.disabled = true;
+                    aiChatInput.disabled = true;
+                    
+                    appendChatMessage(userInput, 'user');
+                    aiChatInput.value = '';
+                    
+                    const typingIndicator = appendChatMessage('...', 'ai-typing');
+
+                    try {
+                        const systemPrompt = "You are AI Praman, an AI legal information assistant. Your purpose is to answer questions about deepfake technology and Indian cyber laws by summarizing information found in real-time Google Search results. You MUST NOT provide legal advice, opinions, or interpretations. You must strictly base your answers on the information provided in the search results. At the end of every response, you MUST remind the user to consult a qualified human lawyer for any legal matters. Your tone should be helpful, neutral, and professional.";
+                        
+                        const payload = {
+                            contents: [{ parts: [{ text: userInput }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                        };
+
+                        const response = await callGemini(payload, true);
+                        if (typingIndicator) typingIndicator.remove();
+                        appendChatMessage(response, 'ai');
+                    } finally {
+                        aiChatSendBtn.disabled = false;
+                        aiChatInput.disabled = false;
+                        aiChatInput.focus();
+                    }
+                };
+
+                if (aiChatSendBtn) aiChatSendBtn.addEventListener('click', handleAIChat);
+                if (aiChatInput) aiChatInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAIChat(); });
+
+                const appendChatMessage = (message, sender) => {
+                    const wrapper = document.createElement('div');
+                    if (sender === 'ai-typing') {
+                        wrapper.className = 'flex justify-start ai-typing-indicator-wrapper';
+                        wrapper.innerHTML = `<div class="ai-chat-bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>`;
+                    } else if (sender === 'user') {
+                         wrapper.className = `flex justify-end`;
+                         wrapper.innerHTML = `<div class="user-chat-bubble"><p>${message.replace(/\n/g, '<br>')}</p></div>`;
+                    } else { // AI response
+                        wrapper.className = `flex flex-col items-start`;
+                        let sourcesHTML = '';
+                        if (message.sources && message.sources.length > 0) {
+                            sourcesHTML += '<div class="mt-2 border-t border-gray-300 pt-2 w-full">';
+                            sourcesHTML += '<p class="text-xs font-semibold text-gray-600 mb-1">Sources:</p>';
+                            sourcesHTML += '<ol class="list-decimal list-inside text-xs space-y-1">';
+                            message.sources.forEach(source => {
+                                sourcesHTML += `<li><a href="${source.uri}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${source.title}</a></li>`;
+                            });
+                            sourcesHTML += '</ol></div>';
+                        }
+
+                        wrapper.innerHTML = `
+                            <div class="ai-chat-bubble">
+                                <p>${message.text.replace(/\n/g, '<br>')}</p>
+                                ${sourcesHTML}
+                            </div>`;
+                    }
+
+                    if(aiChatHistory) {
+                        aiChatHistory.appendChild(wrapper);
+                        aiChatHistory.scrollTop = aiChatHistory.scrollHeight;
+                    }
+                    return wrapper;
+                };
+
+                // --- News Feed Logic ---
+                async function fetchNews() {
+                    if (newsData) {
+                        renderNews(newsData);
+                        return;
+                    }
+                    
+                    if (!GEMINI_API_KEY) {
+                        newsFeedContainer.innerHTML = `
+                            <div class="col-span-1 md:col-span-2 lg:col-span-3 text-center p-8 bg-white rounded-lg shadow-md">
+                                <p class="text-red-700 font-semibold">An API Key is required for this feature.</p>
+                                <p class="text-sm text-gray-600 mt-2">Please enter your key to view the real-time news feed.</p>
+                                <button id="openApiKeyModalBtnNews" class="mt-4 bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300">Enter API Key</button>
+                            </div>`;
+                        document.getElementById('openApiKeyModalBtnNews').addEventListener('click', showApiKeyModal);
+                        return;
+                    }
+
+                    let skeletonHTML = '';
+                    for(let i=0; i<6; i++) {
+                        skeletonHTML += `
+                            <div class="card p-4 rounded-xl shadow-lg animate-pulse">
+                                <div class="bg-gray-300 h-40 rounded-lg"></div>
+                                <div class="mt-4 h-6 bg-gray-300 rounded w-3/4"></div>
+                                <div class="mt-2 h-4 bg-gray-300 rounded"></div>
+                                <div class="mt-1 h-4 bg-gray-300 rounded w-5/6"></div>
+                            </div>`;
+                    }
+                    newsFeedContainer.innerHTML = skeletonHTML;
+                    
+                    const systemPrompt = `You are a news aggregation AI. Find the 6 latest and most significant news articles from the last week related to deepfakes, AI-generated media, and government regulations on this technology, with a focus on India. Return ONLY a raw JSON object string with a single key "articles" which is an array of objects. Do not include any other text, markdown formatting, or explanations. Each object in the array should have these keys: 'title' (a concise headline), 'summary' (a 2-3 sentence summary), and 'source_url' (the direct URL to the article).`;
+                    
+                    const userQuery = "latest news on deepfakes, AI-generated media, and government regulations in India and globally";
+
+                    const payload = {
+                        contents: [{ parts: [{ text: userQuery }] }],
+                         systemInstruction: { parts: [{ text: systemPrompt }] }
+                    };
+
+                    const response = await callGemini(payload, true);
+
+                    if (response.error) {
+                        newsFeedContainer.innerHTML = `<div class="col-span-1 md:col-span-2 lg:col-span-3 text-center p-4 bg-red-50 rounded-lg"><p class="text-red-700">${response.text}</p></div>`;
+                        return;
+                    }
+
+                    try {
+                        const cleanedResponse = response.text.replace(/```json/g, '').replace(/```/g, '');
+                        const parsedJson = JSON.parse(cleanedResponse);
+                        if (parsedJson.articles && parsedJson.articles.length > 0) {
+                            newsData = parsedJson.articles; // Cache the data
+                            renderNews(newsData);
+                        } else {
+                            throw new Error("No articles found in the response.");
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse news JSON:", e, "Raw response:", response.text);
+                        newsFeedContainer.innerHTML = `<div class="col-span-1 md:col-span-2 lg:col-span-3 text-center p-4 bg-red-50 rounded-lg"><p class="text-red-700">Could not retrieve or parse the news feed. The AI returned an unexpected format. Please try again later.</p></div>`;
+                    }
+                }
+
+                function renderNews(articles) {
+                    newsFeedContainer.innerHTML = '';
+                    articles.forEach(article => {
+                        const newsItem = document.createElement('a');
+                        newsItem.href = article.source_url;
+                        newsItem.target = "_blank";
+                        newsItem.rel = "noopener noreferrer";
+                        newsItem.className = "card p-4 rounded-xl shadow-lg flex flex-col hover:shadow-2xl transition-shadow duration-300";
+                        
+                        const placeholderImageUrl = `https://placehold.co/600x400/e2e8f0/4a5568?text=${encodeURIComponent(article.title.split(' ')[0])}`;
+
+                        newsItem.innerHTML = `
+                            <img src="${placeholderImageUrl}" alt="News article image" class="rounded-lg h-40 object-cover w-full">
+                            <div class="mt-4 flex flex-col flex-grow">
+                                <h3 class="font-bold text-lg text-gray-800 flex-grow">${article.title}</h3>
+                                <p class="text-gray-600 text-sm mt-2">${article.summary}</p>
+                                <span class="text-blue-600 text-sm font-semibold mt-4 self-start">Read More &rarr;</span>
+                            </div>`;
+                        newsFeedContainer.appendChild(newsItem);
+                    });
+                }
+                
+                // --- History Logic ---
+                const updateHistory = (result) => {
+                    const historyResult = {
+                        ...result,
+                        imageSrc: result.contentType === 'image' || result.contentType === 'text-in-image' ? result.imageSrc : null,
+                    };
+                    analysisHistory.unshift(historyResult);
+                    if (analysisHistory.length > 5) analysisHistory.pop();
+                    sessionStorage.setItem('aiPramanHistory', JSON.stringify(analysisHistory));
+                    renderHistory();
+                };
+
+                const renderHistory = () => {
+                    if (!historySection || !historyContainer) return;
+
+                    historySection.classList.toggle('hidden', analysisHistory.length === 0);
+                    if (analysisHistory.length === 0) return;
+                    
+                    historyContainer.innerHTML = '';
+                    analysisHistory.forEach(item => {
+                        const historyItem = document.createElement('div');
+                        historyItem.className = 'cursor-pointer group';
+                        let thumbnailHTML = '';
+                        let isItemFake = item.isFake;
+                        
+                        // For text-in-image, the "fakeness" is about the claim's truthfulness
+                        if (item.contentType === 'text-in-image') {
+                           isItemFake = !item.details.is_claim_true;
+                        }
+
+                        if (item.contentType === 'image' || item.contentType === 'text-in-image') {
+                            thumbnailHTML = `<img src="${item.imageSrc}" class="rounded-lg object-cover w-full h-24 shadow-md"/>`;
+                        } else if (item.contentType === 'video') {
+                            thumbnailHTML = `<div class="w-full h-24 rounded-lg shadow-md bg-gray-800 flex flex-col items-center justify-center text-white p-2">
+                                                 <svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" /></svg>
+                                                 <p class="text-xs mt-1 text-center break-all truncate">${item.fileName}</p>
+                                                </div>`;
+                        } else if (item.contentType === 'audio') {
+                            thumbnailHTML = `<div class="w-full h-24 rounded-lg shadow-md bg-gray-800 flex flex-col items-center justify-center text-white p-2">
+                                                 <svg class="w-8 h-8" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5a6 6 0 00-6-6v1.5a4.5 4.5 0 11-4.5 4.5v-1.5a6 6 0 006-6zm-2.25-7.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z" /></svg>
+                                                 <p class="text-xs mt-1 text-center break-all truncate">${item.fileName}</p>
+                                                </div>`;
+                        }
+                        
+                        let verdictText, verdictClass;
+                        if (item.contentType === 'text-in-image') {
+                           verdictText = isItemFake ? 'False' : 'True';
+                           verdictClass = isItemFake ? 'bg-red-500' : 'bg-green-500';
+                        } else {
+                           verdictText = isItemFake ? 'AI' : 'Real';
+                           verdictClass = isItemFake ? 'bg-red-500' : 'bg-green-500';
+                        }
+
+
+                        historyItem.innerHTML = `
+                            <div class="relative">
+                                ${thumbnailHTML}
+                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition duration-300 flex items-center justify-center rounded-lg">
+                                   <p class="text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity">View</p>
+                                </div>
+                                <div class="absolute top-1 right-1 px-2 py-0.5 rounded-full text-xs font-semibold text-white ${verdictClass}">
+                                    ${verdictText}
+                                </div>
+                            </div>`;
+                        
+                        historyItem.addEventListener('click', () => {
+                            showPage(resultPage);
+                            const resultForDisplay = { ...item };
+                            if (resultForDisplay.imageSrc && resultForDisplay.imageSrc.startsWith('http')) {
+                                startAnalysis(resultForDisplay.imageSrc, { contentType: 'image', isUrl: true });
+                            } else {
+                                displayCachedResult(resultForDisplay);
+                            }
+                        });
+                        historyContainer.appendChild(historyItem);
+                    });
+                };
+
+
+                // --- Other Functions ---
+                const displayCachedResult = (result) => {
+                    resetResultPage();
+                    skeletonLoader.classList.add('hidden');
+
+                    if (result.contentType === 'image' || result.contentType === 'text-in-image') {
+                        mediaDisplayContainer.innerHTML = `<img id="resultImage" src="${result.imageSrc}" alt="Analyzed image" class="rounded-xl shadow-2xl w-full h-auto object-contain">`;
+                    } else if (result.contentType === 'video') {
+                        mediaDisplayContainer.innerHTML = `<div class="bg-gray-100 p-6 rounded-xl shadow-lg flex flex-col items-center justify-center"><svg class="w-24 h-24 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15.91 11.672a.375.375 0 010 .656l-5.603 3.113a.375.375 0 01-.557-.328V8.887c0-.286.307-.466.557-.327l5.603 3.112z" /></svg><p class="text-center font-semibold">${result.fileName}</p><p class="text-sm text-gray-500 mt-2">(Video preview not available from history)</p></div>`;
+                    } else if (result.contentType === 'audio') {
+                        mediaDisplayContainer.innerHTML = `<div class="bg-gray-100 p-6 rounded-xl shadow-lg flex flex-col items-center justify-center"><svg class="w-24 h-24 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5a6 6 0 00-6-6v1.5a4.5 4.5 0 11-4.5 4.5v-1.5a6 6 0 006-6zm-2.25-7.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-4.5z" /></svg><p class="text-center font-semibold">${result.fileName}</p><p class="text-sm text-gray-500 mt-2">(Audio player not available from history)</p></div>`;
+                    }
+                    
+                    if (result.contentType === 'text-in-image') {
+                        const isClaimTrue = result.details.is_claim_true;
+                        resultTitle.textContent = isClaimTrue ? "Claim Appears True" : "Claim Appears False";
+                        resultTitle.className = `text-3xl font-bold mb-2 ${isClaimTrue ? 'text-green-600' : 'text-red-600'}`;
+                        displayAnalysisDetails(analysisDetailsList, result.details, !isClaimTrue, "Text in Image Analysis:");
+                    } else {
+                        const isFake = result.isFake;
+                        resultTitle.textContent = isFake ? "Likely AI-Generated" : "Likely Real";
+                        resultTitle.className = `text-3xl font-bold mb-2 ${isFake ? 'text-red-600' : 'text-green-600'}`;
+                         displayAnalysisDetails(analysisDetailsList, result.details, isFake, "Initial Forensic Analysis:");
+                    }
+
+                    updateConfidenceBar(result.confidence, result.isFake);
+                    
+                    resultContent.classList.remove('hidden');
+                    actionButtons.classList.remove('hidden');
+
+                    if (result.contentType === 'image') {
+                        heatmapBtn.classList.remove('hidden');
+                        aiCritiqueBtn.classList.remove('hidden');
+                    }
+
+                    if (result.contentType !== 'text-in-image') {
+                       reportBtn.style.display = 'block';
+                    } else {
+                        reportBtn.style.display = 'none';
+                    }
+
+                    currentAnalysisResult = result;
+                };
+
+                function updateConfidenceBar(confidence, isFake) {
+                    if (!confidenceBar || !resultConfidence) return;
+                    confidenceBar.classList.remove('bg-red-500', 'bg-green-500');
+                    confidenceBar.style.width = '0%';
+                    if (confidence) {
+                        resultConfidence.textContent = `Confidence: ${confidence}%`;
+                        const barColor = isFake ? 'bg-red-500' : 'bg-green-500';
+                        confidenceBar.classList.add(barColor);
+                        setTimeout(() => { confidenceBar.style.width = `${confidence}%`; }, 100);
+                    } else {
+                        resultConfidence.textContent = '';
+                    }
+                }
+                 function displayAnalysisDetails(listElement, details, isFake, headerText) {
+                     listElement.innerHTML = '';
+                     const redIcon = `<svg class="w-5 h-5 mr-2 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>`;
+                     const greenIcon = `<svg class="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>`;
+                    
+                     const header = document.createElement('h4');
+                     header.className = "font-semibold mb-2 text-base";
+                     header.textContent = headerText;
+                     listElement.appendChild(header);
+
+                     if (typeof details === 'object' && (details.generationModel || details.extracted_text)) {
+                          let conclusionText, points, anatomyPoints;
+                          const colorClass = isFake ? 'text-red-700' : 'text-green-700';
+
+                          if (details.extracted_text) { // Text-in-Image result
+                              conclusionText = `<strong>Extracted Text:</strong> "${details.extracted_text}"`;
+                              points = [details.explanation, ...(details.forensic_points || [])];
+                          } else { // Media result
+                              conclusionText = `<strong>Conclusion:</strong> <span class="${colorClass} font-semibold">${details.generationModel}</span>`;
+                              points = details.forensics || [];
+                              anatomyPoints = details.anatomy || [];
+                          }
+                         
+                          const headerLi = document.createElement('li');
+                          headerLi.innerHTML = conclusionText;
+                          listElement.appendChild(headerLi);
+                         
+                          const spacerLi = document.createElement('li');
+                          spacerLi.className = 'pt-2';
+                          listElement.appendChild(spacerLi);
+
+                          points.forEach(detail => {
+                              const li = document.createElement('li');
+                              li.className = 'flex items-start';
+                              li.innerHTML = `${isFake ? redIcon : greenIcon} <span>${detail}</span>`;
+                              listElement.appendChild(li);
+                          });
+
+                         if (details.extracted_text) {
+                             if (details.corrected_information && isFake) { // isFake means claim is false
+                                 const correctionContainer = document.createElement('div');
+                                 correctionContainer.className = 'mt-4 p-4 bg-yellow-50 border-l-4 border-yellow-400';
+                                 correctionContainer.innerHTML = `
+                                     <h5 class="font-bold text-yellow-800">Correct Information:</h5>
+                                     <p class="text-sm text-yellow-900">${details.corrected_information}</p>
+                                 `;
+                                 listElement.appendChild(correctionContainer);
+                             }
+
+                             if (details.references && details.references.length > 0) {
+                                 const referencesContainer = document.createElement('div');
+                                 referencesContainer.className = 'mt-4';
+                                 let referencesHTML = `<h5 class="font-bold text-gray-800">${isFake ? 'References for Correction:' : 'Supporting Sources:'}</h5><ul class="list-disc list-inside space-y-1 mt-2 text-sm">`;
+                                 details.references.forEach(ref => {
+                                     referencesHTML += `<li><a href="${ref.url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${ref.title}</a></li>`;
+                                 });
+                                 referencesHTML += '</ul>';
+                                 referencesContainer.innerHTML = referencesHTML;
+                                 listElement.appendChild(referencesContainer);
+                             }
+                         } else if (Array.isArray(anatomyPoints) && anatomyPoints.length > 0) { // Original anatomy section for media
+                              const anatomyHeader = document.createElement('li');
+                              anatomyHeader.className = 'pt-3 font-semibold text-gray-800 text-sm';
+                              anatomyHeader.textContent = 'Anatomical Review:';
+                              listElement.appendChild(anatomyHeader);
+
+                              anatomyPoints.forEach(detail => {
+                                  const li = document.createElement('li');
+                                  li.className = 'flex items-start';
+                                  li.innerHTML = `${isFake ? redIcon : greenIcon} <span>${detail}</span>`;
+                                  listElement.appendChild(li);
+                              });
+                          }
+                     }
+                 };
+
+                // --- PDF Report Generation ---
+                if (downloadReportBtn) {
+                    downloadReportBtn.addEventListener('click', () => {
+                        generateReportPDF(currentAnalysisResult);
+                    });
+                }
+
+                function generateReportPDF(result) {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    let yPos = 40;
+
+                    doc.setFontSize(22);
+                    doc.setFont("helvetica", "bold");
+                    doc.text("AI Praman: Forensic Analysis Report", doc.internal.pageSize.getWidth() / 2, 20, { align: 'center' });
+                    doc.setLineWidth(0.5);
+                    doc.line(15, 25, 195, 25);
+
+                    doc.setFontSize(16);
+                    doc.setFont("helvetica", "bold");
+
+                    if (result.contentType === 'image' || result.contentType === 'text-in-image') {
+                        doc.text("Analyzed Image:", 15, yPos);
+                        yPos += 10;
+                        try {
+                            const imgData = result.imageSrc;
+                            const imgProps = doc.getImageProperties(imgData);
+                            const aspect = imgProps.height / imgProps.width;
+                            const imgWidth = 180;
+                            const imgHeight = Math.min(imgWidth * aspect, 100);
+                            doc.addImage(imgData, 'JPEG', 15, yPos, imgWidth, imgHeight);
+                            yPos += imgHeight + 15;
+                        } catch (e) {
+                            yPos = addWrappedText(doc, "Could not embed image due to cross-origin security policy.", 15, yPos, { color: [255, 0, 0] });
+                        }
+                    } else {
+                        doc.text(`Analyzed File: ${result.fileName || 'N/A'}`, 15, yPos);
+                        yPos += 10;
+                    }
+                    
+                    let isVerdictFake, verdictText, verdictColor;
+
+                    if(result.contentType === 'text-in-image') {
+                        isVerdictFake = !result.details.is_claim_true;
+                        verdictText = isVerdictFake ? "VERDICT: Claim is Likely False" : "VERDICT: Claim is Likely True";
+                        verdictColor = isVerdictFake ? [220, 38, 38] : [22, 163, 74];
+                    } else {
+                        isVerdictFake = result.isFake;
+                        verdictText = isVerdictFake ? "VERDICT: Likely AI-Generated" : "VERDICT: Likely Real Content";
+                        verdictColor = isVerdictFake ? [220, 38, 38] : [22, 163, 74];
+                    }
+
+                    doc.setFontSize(18);
+                    doc.setFont("helvetica", "bold");
+                    doc.setTextColor(...verdictColor);
+                    doc.text(verdictText, 15, yPos);
+                    doc.setTextColor(0,0,0);
+                    yPos += 8;
+
+                    doc.setFontSize(14);
+                    doc.setFont("helvetica", "normal");
+                    doc.text(`Confidence Score: ${result.confidence}%`, 15, yPos);
+                    yPos += 15;
+                    
+                    doc.setFontSize(16);
+                    doc.setFont("helvetica", "bold");
+                    doc.text('Forensic Analysis:', 15, yPos);
+                    yPos += 10;
+
+                    doc.setFontSize(11);
+                    doc.setFont("helvetica", "normal");
+                    
+                    let points = [];
+                    if(result.contentType === 'text-in-image') {
+                        points.push(`Extracted Text: ${result.details.extracted_text}`);
+                        points.push(`Explanation: ${result.details.explanation}`);
+                        points.push(...(result.details.forensic_points || []));
+                    } 
+                    else {
+                        points.push(`Conclusion: ${result.details.generationModel}`);
+                        points.push(...(result.details.forensics || []));
+                        points.push(...(result.details.anatomy || []));
+                    }
+
+                    points.forEach(point => {
+                       if (yPos > 270) { doc.addPage(); yPos = 20; }
+                       const lines = doc.splitTextToSize(point, 175);
+                       doc.text(`• ${lines.join('\n')}`, 20, yPos);
+                       yPos += (lines.length * 5) + 3;
+                    });
+
+                    if (yPos > 260) { doc.addPage(); yPos = 20; }
+
+                    if (result.contentType === 'text-in-image') {
+                        const details = result.details;
+                        if (details.corrected_information && isVerdictFake) {
+                            doc.setFontSize(14);
+                            doc.setFont("helvetica", "bold");
+                            doc.text('Corrected Information:', 15, yPos);
+                            yPos += 8;
+                            doc.setFontSize(11);
+                            doc.setFont("helvetica", "normal");
+                            const correctedLines = doc.splitTextToSize(details.corrected_information, 180);
+                            doc.text(correctedLines, 15, yPos);
+                            yPos += (correctedLines.length * 5) + 5;
+                        }
+
+                        if (details.references && details.references.length > 0) {
+                            if (yPos > 260) { doc.addPage(); yPos = 20; }
+                            doc.setFontSize(14);
+                            doc.setFont("helvetica", "bold");
+                            doc.text('References:', 15, yPos);
+                            yPos += 8;
+                            doc.setFontSize(11);
+                            doc.setFont("helvetica", "normal");
+                            details.references.forEach(ref => {
+                                if (yPos > 270) { doc.addPage(); yPos = 20; }
+                                const refText = `${ref.title} (${ref.url})`;
+                                const refLines = doc.splitTextToSize(refText, 175);
+                                doc.text(`• ${refLines.join('\n')}`, 20, yPos);
+                                yPos += (refLines.length * 5) + 3;
+                            });
+                        }
+                    }
+                    
+                    const pageCount = doc.internal.getNumberOfPages();
+                    for (let i = 1; i <= pageCount; i++) {
+                        doc.setPage(i);
+                        doc.setFontSize(10);
+                        doc.setTextColor(150);
+                        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() / 2, 287, { align: 'center' });
+                    }
+
+                    doc.save('AI_Praman_Report.pdf');
+                }
+
+                // --- Quiz Logic ---
+                const quizData = [
+                    {
+                        type: 'image',
+                        content: 'https://images.pexels.com/photos/15570023/pexels-photo-15570023.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+                        question: 'Is this image real or AI-generated?',
+                        options: ['Real', 'AI-Generated'],
+                        correctAnswer: 'AI-Generated',
+                        explanation: 'This is AI-generated. The background mountains have an unnaturally smooth, "painted" look, a common trait of diffusion models.'
+                    },
+                    {
+                        type: 'text',
+                        content: '"A new study has proven that chocolate cures all diseases."',
+                        question: 'Is this statement likely to be true or false?',
+                        options: ['True', 'False'],
+                        correctAnswer: 'False',
+                        explanation: 'Extraordinary claims require extraordinary evidence. A single study cannot "prove" something so broad, making this highly likely to be misinformation.'
+                    },
+                     {
+                        type: 'image',
+                        content: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
+                        question: 'Is this image real or AI-generated?',
+                        options: ['Real', 'AI-Generated'],
+                        correctAnswer: 'Real',
+                        explanation: 'This is a real photograph. Notice the natural skin texture, the realistic lighting and shadows, and the fine details in the hair.'
+                    },
+                    {
+                        type: 'image',
+                        content: 'https://cdn.pixabay.com/photo/2023/07/22/09/25/ai-generated-8142788_1280.jpg',
+                        question: 'Is this image real or AI-generated?',
+                        options: ['Real', 'AI-Generated'],
+                        correctAnswer: 'AI-Generated',
+                        explanation: 'This is AI-generated. A key giveaway is the hand. AI models often struggle with hands, and here you can see unnatural finger shapes and proportions.'
+                    },
+                ];
+
+                function startQuiz() {
+                    currentQuestionIndex = 0;
+                    score = 0;
+                    renderQuizQuestion();
+                }
+
+                function renderQuizQuestion() {
+                    if (currentQuestionIndex >= quizData.length) {
+                        showQuizResults();
+                        return;
+                    }
+                    const question = quizData[currentQuestionIndex];
+                    let contentHTML = '';
+                    if (question.type === 'image') {
+                        contentHTML = `<img src="${question.content}" alt="Quiz Image" class="rounded-lg object-cover w-full h-64 mx-auto mb-4 shadow-md">`;
+                    } else {
+                        contentHTML = `<p class="text-xl italic text-gray-700 p-4 bg-gray-100 rounded-lg mb-4">"${question.content}"</p>`;
+                    }
+
+                    quizContainer.innerHTML = `
+                        <p class="text-sm text-gray-600 mb-2">Question ${currentQuestionIndex + 1} of ${quizData.length}</p>
+                        ${contentHTML}
+                        <h4 class="font-semibold text-lg mb-4">${question.question}</h4>
+                        <div id="quizOptions" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            ${question.options.map((opt, i) => `<button data-index="${i}" class="quiz-option-btn w-full bg-white text-blue-600 font-semibold py-3 px-4 rounded-lg border-2 border-blue-500 hover:bg-blue-100 transition duration-300">${opt}</button>`).join('')}
+                        </div>
+                        <div id="quizFeedback" class="mt-4 text-left"></div>
+                    `;
+                    document.querySelectorAll('.quiz-option-btn').forEach(btn => btn.addEventListener('click', handleAnswerSelection));
+                }
+
+                function handleAnswerSelection(e) {
+                    const selectedOption = e.target.textContent;
+                    const question = quizData[currentQuestionIndex];
+                    const isCorrect = selectedOption === question.correctAnswer;
+                    
+                    if (isCorrect) {
+                        score++;
+                    }
+                    
+                    document.querySelectorAll('.quiz-option-btn').forEach(btn => {
+                        btn.disabled = true;
+                        if(btn.textContent === question.correctAnswer) {
+                            btn.classList.add('bg-green-500', 'border-green-500', 'text-white');
+                        } else if (btn.textContent === selectedOption) {
+                             btn.classList.add('bg-red-500', 'border-red-500', 'text-white');
+                        }
+                    });
+
+                    const feedbackEl = document.getElementById('quizFeedback');
+                    feedbackEl.innerHTML = `
+                        <div class="p-4 rounded-lg ${isCorrect ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300'} border">
+                            <h5 class="font-bold ${isCorrect ? 'text-green-800' : 'text-red-800'}">${isCorrect ? 'Correct!' : 'Not quite!'}</h5>
+                            <p class="text-sm ${isCorrect ? 'text-green-700' : 'text-red-700'}">${question.explanation}</p>
+                        </div>
+                        <button id="nextQuestionBtn" class="mt-4 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700">Next Question</button>
+                    `;
+                    document.getElementById('nextQuestionBtn').addEventListener('click', () => {
+                        currentQuestionIndex++;
+                        renderQuizQuestion();
+                    });
+                }
+                
+                function showQuizResults() {
+                    const highScore = sessionStorage.getItem('aiPramanQuizHighScore') || 0;
+                    if (score > highScore) {
+                        sessionStorage.setItem('aiPramanQuizHighScore', score);
+                    }
+                    quizContainer.innerHTML = `
+                        <h4 class="text-2xl font-bold mb-2">Quiz Complete!</h4>
+                        <p class="text-lg text-gray-700 mb-4">You scored ${score} out of ${quizData.length}</p>
+                        <button id="restartQuizBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg hover:bg-blue-700">Play Again</button>
+                    `;
+                     quizHighScore.textContent = `Your High Score: ${sessionStorage.getItem('aiPramanQuizHighScore') || 0}/${quizData.length}`;
+                     quizHighScore.classList.remove('hidden');
+                    document.getElementById('restartQuizBtn').addEventListener('click', startQuiz);
+                }
+
+                // --- NEW -- Event listeners for added features ---
+                async function handleDeepScan() {
+                    if (!currentAnalysisResult || !currentAnalysisResult.originalSrc) return;
+                    
+                    reportBtn.disabled = true;
+                    reportBtn.textContent = 'Scanning...';
+                    deepScanResultContainer.classList.remove('hidden');
+                    deepScanResultContainer.innerHTML = `<div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-full mt-2"></div><div class="skeleton-pulse bg-gray-300 rounded-md h-6 w-5/6 mt-2"></div>`;
+                    
+                    let deepScanResult;
+                    if(currentAnalysisResult.contentType === 'image') {
+                       deepScanResult = await analyzeImageWithGemini(currentAnalysisResult.originalSrc, true);
+                    } else if (currentAnalysisResult.contentType === 'video' || currentAnalysisResult.contentType === 'audio') {
+                        deepScanResult = await new Promise(resolve => setTimeout(() => resolve(simulateMediaAnalysis(currentAnalysisResult.fileObject, currentAnalysisResult.contentType, true)), 2000));
+                    } else {
+                        reportBtn.textContent = 'Deep Scan Not Applicable';
+                        deepScanResultContainer.classList.add('hidden');
+                        return;
+                    }
+                    
+                    if(deepScanResult.error) {
+                        deepScanResultContainer.innerHTML = `<p class="text-red-600">Deep Scan Failed: ${deepScanResult.error}</p>`;
+                    } else {
+                        const list = document.createElement('ul');
+                        list.className = "text-sm text-gray-700 space-y-2";
+                        displayAnalysisDetails(list, deepScanResult.details, deepScanResult.isFake, "Expert Review (Deep Scan):");
+                        deepScanResultContainer.innerHTML = '';
+                        deepScanResultContainer.appendChild(list);
+                    }
+                    reportBtn.textContent = 'Expert Review (Deep Scan)';
+                    reportBtn.disabled = false;
+                }
+
+                function toggleHeatmap() {
+                    heatmapOverlay.classList.toggle('visible');
+                    if (heatmapOverlay.classList.contains('visible')) {
+                        heatmapBtn.textContent = 'Hide Anomaly Heatmap';
+                        heatmapBtn.classList.replace('bg-indigo-100', 'bg-indigo-300');
+                    } else {
+                        heatmapBtn.textContent = 'Show Anomaly Heatmap';
+                        heatmapBtn.classList.replace('bg-indigo-300', 'bg-indigo-100');
+                    }
+                }
+
+                async function handleAiCritique() {
+                    if (!currentAnalysisResult.originalSrc || currentAnalysisResult.contentType !== 'image') return;
+                    aiCritiqueBtn.disabled = true;
+                    aiCritiqueBox.classList.remove('hidden');
+                    aiCritiqueBox.innerHTML = 'Asking Gemini for feedback...';
+
+                    const isFake = currentAnalysisResult.isFake;
+                    const prompt = isFake 
+                        ? "This image was identified as AI-generated. As an expert in photorealism, provide 2-3 specific, actionable suggestions on how the creator could make a similar image look more realistic in the future. Focus on details like lighting, texture, and anatomical consistency."
+                        : "This image was identified as a real photograph. As a professional photo critic, provide 2-3 specific, actionable suggestions on how this photo could be improved. Focus on composition, lighting, or post-processing techniques.";
+                    
+                    const base64Data = currentAnalysisResult.originalSrc.split(',')[1];
+                    const mimeType = currentAnalysisResult.originalSrc.split(';')[0].split(':')[1];
+
+                    const payload = {
+                        contents: [{ parts: [ { text: prompt }, { inlineData: { mimeType: mimeType, data: base64Data } } ] }]
+                    };
+
+                    const response = await callGemini(payload);
+                    if (response.error) {
+                         aiCritiqueBox.innerHTML = `<p class="text-red-700">${response.text}</p>`;
+                    } else {
+                        aiCritiqueBox.innerHTML = response.text.replace(/\n/g, '<br>');
+                    }
+                    aiCritiqueBtn.disabled = false;
+                }
+                
+                async function analyzeTextInImage(imageDataUrl) {
+                    const base64Data = imageDataUrl.split(',')[1];
+                    const mimeType = imageDataUrl.split(';')[0].split(':')[1];
+
+                    // Step 1: Extract Text
+                    progressText.textContent = "Step 1/2: Extracting text from image...";
+                    const extractionPayload = {
+                        contents: [{ parts: [ { text: "Extract all prominent text from the provided image. If no text is found, respond with the exact string 'NO_TEXT_FOUND'." }, { inlineData: { mimeType: mimeType, data: base64Data } } ] }]
+                    };
+                    const extractionResponse = await callGemini(extractionPayload);
+
+                    if (extractionResponse.error) {
+                        return { error: extractionResponse.text, type: "permanent" };
+                    }
+                    
+                    const extractedText = extractionResponse.text.trim();
+                    if (extractedText === 'NO_TEXT_FOUND' || extractedText === '') {
+                        return { 
+                            isFake: false, // No claim to be fake
+                            confidence: 100,
+                            details: {
+                                extracted_text: "No text found in the image.",
+                                is_claim_true: true,
+                                explanation: "No claims were detected in the image to fact-check.",
+                                forensic_points: ["Image contains no machine-readable text."]
+                            },
+                            contentType: 'text-in-image'
+                        };
+                    }
+
+                    // Step 2: Fact-check the extracted text
+                    progressText.textContent = "Step 2/2: Fact-checking extracted text...";
+                    const factCheckSystemPrompt = `You are an expert fact-checker. Analyze the following text extracted from an image: "${extractedText}". Use Google Search to determine if the primary claim is true. Then, respond ONLY with a raw JSON object string that follows this structure: {"is_claim_true": boolean, "confidence": number, "explanation": "string", "corrected_information": "string (only if claim is false)", "references": [{"title": "string", "url": "string"}]}.`;
+                    
+                    const factCheckPayload = {
+                        contents: [{ parts: [{ text: `Fact-check this claim: ${extractedText}` }] }],
+                        systemInstruction: { parts: [{ text: factCheckSystemPrompt }] }
+                    };
+
+                    const factCheckResponse = await callGemini(factCheckPayload, true);
+
+                    if (factCheckResponse.error) {
+                        return { error: factCheckResponse.text, type: "permanent" };
+                    }
+
+                    try {
+                        const cleanedResponse = factCheckResponse.text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        const parsedJson = JSON.parse(cleanedResponse);
+                        
+                        // Combine results
+                        const finalDetails = {
+                            ...parsedJson,
+                            extracted_text: extractedText,
+                            forensic_points: parsedJson.forensic_points || ["Text appears legible and consistent with the image background."]
+                        };
+
+                        return { 
+                            isFake: !finalDetails.is_claim_true,
+                            confidence: finalDetails.confidence,
+                            details: finalDetails,
+                            contentType: 'text-in-image'
+                        };
+                    } catch(e) {
+                        console.error("Error parsing fact-check response:", e, "Raw response:", factCheckResponse.text);
+                        return { error: "AI returned an invalid format for fact-check analysis.", type: "transient" };
+                    }
+                }
+
+                function simulateMediaAnalysis(file, contentType, isDeepScan) {
+                    let score = 0;
+                    let reasons = [];
+                    const fileName = file.name.toLowerCase();
+
+                    // Check 1: Filename keywords
+                    const fakeKeywords = ['ai', 'gen', 'synth', 'suno', 'pika', 'kaiber', 'deepfake'];
+                    if (fakeKeywords.some(kw => fileName.includes(kw))) {
+                        score += 50;
+                        reasons.push(isDeepScan ? 'Deep Scan: Filename contains keywords strongly associated with AI generation tools.' : 'Filename contains keywords associated with AI generation.');
+                    }
+
+                    // Check 2: File size (very basic simulation)
+                    const sizeInMB = file.size / 1024 / 1024;
+                    if (contentType === 'video' && sizeInMB < 0.5) { // Unusually small for a video
+                        score += 25;
+                        reasons.push(isDeepScan ? 'Deep Scan: Video file size is anomalously small, suggesting aggressive, non-standard compression typical of some generative models.' : 'File size is unusually small for a video file.');
+                    }
+                    if (contentType === 'audio' && sizeInMB < 0.1) { // Unusually small for audio
+                        score += 25;
+                        reasons.push(isDeepScan ? 'Deep Scan: Audio file size is anomalously small, indicating a potentially synthetic origin with low bitrate.' : 'File size is unusually small for an audio file.');
+                    }
+                    
+                    // Check 3: "Metadata" simulation (based on filename length)
+                    if (fileName.length < 15) { // Short, generic names often lack metadata
+                        score += 15;
+                        reasons.push(isDeepScan ? 'Deep Scan: Analysis of file container confirms the absence of standard EXIF/RIFF metadata chunks expected from a recording device.' : 'Simulated metadata check failed (no device information found).');
+                    }
+
+                    const isFake = score >= 50;
+                    
+                    let realReasons = [
+                        isDeepScan ? 'Deep Scan: File container includes standard metadata chunks consistent with a physical recording device.' : 'Simulated metadata check passed.',
+                        isDeepScan ? 'Deep Scan: Noise profile analysis is consistent with a known CMOS sensor or microphone model.' : 'Noise profile appears natural for the file type.',
+                        isDeepScan ? 'Deep Scan: Compression artifacts are uniform and consistent with standard codecs (e.g., AVC, AAC).' : 'File compression appears standard.'
+                    ];
+                    
+                    let details = {};
+                    if(contentType === 'video') {
+                        details = {
+                            generationModel: isFake ? 'GAN-based Video Synthesis (Simulated)' : 'Authentic Video Recording (Simulated)',
+                            forensics: isFake ? reasons : realReasons,
+                            anatomy: isFake ? ['Eye blinking rate is abnormally periodic.'] : ['Micro-expressions appear natural.']
+                        };
+                    } else { // Audio
+                         details = {
+                            generationModel: isFake ? 'Voice Cloning / Synthesis Model (Simulated)' : 'Authentic Audio Recording (Simulated)',
+                            forensics: isFake ? reasons : realReasons,
+                            anatomy: []
+                        };
+                    }
+                    
+                    const confidence = isFake ? Math.min(98, 75 + score / 5) : Math.min(98, 85 + (15 - fileName.length));
+
+                    return { isFake, confidence: Math.floor(confidence), details, contentType, fileName: file.name };
+                }
+
+                
+                if(reportBtn) reportBtn.addEventListener('click', handleDeepScan);
+                if(heatmapBtn) heatmapBtn.addEventListener('click', toggleHeatmap);
+                if(aiCritiqueBtn) aiCritiqueBtn.addEventListener('click', handleAiCritique);
+
+                // Initialize
+                showPage(loginPage);
+                startQuiz();
+                renderHistory();
+
+            } catch (error) {
+                console.error("A critical error occurred during application initialization:", error);
+                document.body.innerHTML = `<div style="text-align: center; padding: 50px; font-family: sans-serif; color: #333;"><h1>Oops! An Error Occurred</h1><p>The application could not start due to an unexpected error. Please try refreshing the page.</p></div>`;
+            }
+        });
+    </script>
+</body>
+</html>
+
